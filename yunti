@@ -158,7 +158,7 @@ class YunTi {
 
                 $type = trim($tr->find('td', -2)->plaintext);
 
-                $servers[] = compact('name', 'ip', 'type');
+                $servers[] = compact('name', 'type', 'ip');
             }
         }
         return $servers;
@@ -272,7 +272,16 @@ class YunTi {
             }
 
             if (count($avgs) == count($this->servers)) {
-                $this->cli->br()->table($this->servers);
+
+                $table[] = ['name', 'type', 'ip', 'avg'];
+
+                foreach ($this->servers as $key => $server) {
+                    $table[] = array_values($server);
+                }
+
+                $this->cli->clear();
+
+                $this->cli->br()->columns($table);
 
                 break;
             }
