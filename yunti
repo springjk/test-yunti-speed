@@ -3,10 +3,10 @@
 require __DIR__ . '/vendor/autoload.php';
 
 use GuzzleHttp\Client;
+use League\CLImate\CLImate;
 use Sunra\PhpSimple\HtmlDomParser;
 
-class YunTi
-{
+class YunTi {
     // /Library/Preferences/SystemConfiguration/preferences.plist
     const SITE_URL = 'https://www.cryptpline.com';
     const LOGIN_PATH = '/users/sign_in';
@@ -29,8 +29,7 @@ class YunTi
      */
     private $servers;
 
-    public function __construct()
-    {
+    public function __construct() {
         $this->parser = new HtmlDomParser();
 
         $options = [
@@ -41,21 +40,20 @@ class YunTi
         ];
 
         $this->client = new Client($options);
+        $this->cli = new CLImate;
 
         date_default_timezone_set('Asia/Shanghai');
     }
 
-    public function run()
-    {
-
-        if (is_file('servers.txt')) {
+    public function run() {
+        if (is_file(__DIR__ . '/servers.txt')) {
             $text = file_get_contents('servers.txt', 'r') or die('Unable to open file!');
 
             $this->servers = json_decode($text, true);
 
         } else {
 
-            if (is_file('auth.txt')) {
+            if (is_file(__DIR__ . '/auth.txt')) {
                 $text = file_get_contents('auth.txt', 'r') or die('Unable to open file!');
 
                 $auth = json_decode($text, true);
@@ -72,16 +70,15 @@ class YunTi
             $this->storageServers($this->servers);
         }
 
-        $avgs = $this->pingTest($this->servers);
+        $avgs = $this->pingTest();
 
-        $this->connection($this->servers, $avgs);
+        $this->connection($avgs);
     }
 
     /**
      * @return mixed
      */
-    public function getCsrfToken()
-    {
+    public function getCsrfToken() {
         $result = $this->client->get(self::LOGIN_PATH);
 
         $html = $result->getBody();
@@ -103,8 +100,7 @@ class YunTi
      * @param $username
      * @param $password
      */
-    private function login($username, $password)
-    {
+    private function login($username, $password) {
         $this->getCsrfToken();
 
         $result = $this->client->post(self::LOGIN_PATH, [
@@ -139,8 +135,7 @@ class YunTi
     /**
      * @return mixed
      */
-    private function getServers()
-    {
+    private function getServers() {
 
         $result = $this->client->get(self::SERVERS_PATH);
 
@@ -172,8 +167,7 @@ class YunTi
     /**
      * @param array $servers
      */
-    public function storageServers(array $servers)
-    {
+    public function storageServers(array $servers) {
         $file = fopen('servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($servers));
@@ -184,8 +178,7 @@ class YunTi
     /**
      * @return mixed
      */
-    public function inputAuth()
-    {
+    public function inputAuth() {
         do {
             fwrite(STDOUT, '请输入您的云梯登陆账号：' . PHP_EOL);
             $username = trim(fgets(STDIN));
@@ -206,8 +199,7 @@ class YunTi
     /**
      * @param array $auth
      */
-    public function saveAuth(array $auth)
-    {
+    public function saveAuth(array $auth) {
         $file = fopen('auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($auth));
@@ -216,10 +208,9 @@ class YunTi
     }
 
     /**
-     * @param $servers
+     * @return mixed
      */
-    public function pingTest($servers)
-    {
+    public function pingTest() {
         $dir = __DIR__ . '/logs/';
 
         if (!is_dir($dir)) {
@@ -236,41 +227,53 @@ class YunTi
             }
         }
 
-        echo 'ping 啊 ping，ping 个大气球……' . PHP_EOL;
+        $this->cli->out('ping 啊 ping，ping 个大气球……');
 
-        foreach ($servers as $key => $server) {
+        foreach ($this->servers as $key => $server) {
             exec('ping -c 5 ' . $server['ip'] . ' > ' . $dir . $key . '.log &');
         }
 
         $avgs = [];
-        while (true) {
 
+        $progress = $this->cli->br()->progress()->total(count($this->servers));
+
+        $servers = $this->servers;
+
+        while (true) {
             foreach ($servers as $key => $server) {
-                # 已测试的则跳过
-                if (array_key_exists($key, $avgs)) {
-                    continue;
-                }
 
                 $file_name = $key . '.log';
+
                 $data = file($dir . $file_name);
 
-                $last_line = $data[count($data)-1];
+                $last_line = array_pop($data);
 
                 if (strpos($last_line, 'avg')) {
-
                     # Mac用户
                     preg_match_all('/[1-9]\d*\.\d{3}/', $last_line, $matches);
 
                     $avg = $matches[0][1];
 
-                    echo $server['name'] . '--' . $server['type'] . '--' . $server['ip'] . '--' . $avg . PHP_EOL;
-
                     $avgs[$key] = $avg;
+
+                    $this->servers[$key]['avg'] = $avg;
+                } elseif (strpos($last_line, '100.0% packet loss')) {
+                    $avgs[$key] = 'down';
+
+                    $this->servers[$key]['avg'] = 'down';
                 } else {
-                    sleep(1);
+                    usleep(5000);
+                    continue;
                 }
+
+                unset($servers[$key]);
+
+                $progress->current(count($avgs));
             }
-            if (count($avgs) == count($servers)) {
+
+            if (count($avgs) == count($this->servers)) {
+                $this->cli->br()->table($this->servers);
+
                 break;
             }
         }
@@ -278,11 +281,13 @@ class YunTi
         return $avgs;
     }
 
-    public function connection($servers, $avgs)
-    {
-        $fast_server_key = array_search(min($avgs), $servers);
+    /**
+     * @param $avgs
+     */
+    public function connection($avgs) {
+        $fast_server_key = array_search(min($avgs), $avgs);
 
-        $fastest_vpn_name = '云梯 ' . $servers[33]['name'] . ' ' . $servers[$fast_server_key]['type'];
+        $fastest_vpn_name = '云梯 ' . $this->servers[$fast_server_key]['name'] . ' ' . $this->servers[$fast_server_key]['type'];
         $fastest_vpn_info = '延迟最低的线路为：' . $fastest_vpn_name . ' AVG: ' . min($avgs);
 
         $scpt_code_templete = [
@@ -294,49 +299,24 @@ class YunTi
             'end tell',
         ];
         $scpt_code = 'osascript';
+
         foreach ($scpt_code_templete as $key => $value) {
             $scpt_code .= ' -e \'' . $value . '\'';
         }
 
-        echo $this->colorize($fastest_vpn_info . PHP_EOL, "SUCCESS");
+        $this->cli->br()->out($fastest_vpn_info);
 
-        $old_ip = file_get_contents('http://ident.me');
+        $old_ip = file_get_contents('http://ip.cip.cc');
 
         exec($scpt_code, $result);
 
-        echo '正在连接' . $fastest_vpn_name . PHP_EOL;
+        $this->cli->br()->out('正在连接' . $fastest_vpn_name . '……');
 
         do {
-            $new_ip = file_get_contents('http://ident.me');
+            $new_ip = file_get_contents('http://ip.cip.cc');
         } while ($new_ip == $old_ip);
 
-        echo $this->colorize('完成' . PHP_EOL, "SUCCESS");
-    }
-
-    /**
-     * @param $text
-     * @param $status
-     */
-    public function colorize($text, $status)
-    {
-        $out = '';
-        switch ($status) {
-            case "SUCCESS":
-                $out = "[32m"; //Green
-                break;
-            case "FAILURE":
-                $out = "[31m"; //Red
-                break;
-            case "WARNING":
-                $out = "[33m"; //Yellow
-                break;
-            case "NOTE":
-                $out = "[34m"; //Blue
-                break;
-            default:
-                throw new Exception("Invalid status: " . $status);
-        }
-        return chr(27) . "$out" . "$text" . chr(27) . "[0m";
+        $this->cli->br()->info('完成');
     }
 }
 
@@ -349,3 +329,6 @@ $yunti->run();
 // down file
 // windows
 // rasdial "你的VPN Name" Username Password
+// /Library/Preferences/SystemConfiguration/preferences.plist
+// networksetup listallnetworkservices
+// add art title
