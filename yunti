@@ -47,14 +47,14 @@ class YunTi {
 
     public function run() {
         if (is_file(__DIR__ . '/servers.txt')) {
-            $text = file_get_contents('servers.txt', 'r') or die('Unable to open file!');
+            $text = file_get_contents(__DIR__ . '/servers.txt', 'r') or die('Unable to open file!');
 
             $this->servers = json_decode($text, true);
 
         } else {
 
             if (is_file(__DIR__ . '/auth.txt')) {
-                $text = file_get_contents('auth.txt', 'r') or die('Unable to open file!');
+                $text = file_get_contents(__DIR__ . '/auth.txt', 'r') or die('Unable to open file!');
 
                 $auth = json_decode($text, true);
             } else {
@@ -175,7 +175,7 @@ class YunTi {
      * @param array $servers
      */
     public function storageServers(array $servers) {
-        $file = fopen('servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+        $file = fopen(__DIR__ . 'servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($servers));
 
@@ -207,7 +207,7 @@ class YunTi {
      * @param array $auth
      */
     public function saveAuth(array $auth) {
-        $file = fopen('auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+        $file = fopen(__DIR__ . 'auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($auth));
 
