@@ -175,7 +175,7 @@ class YunTi {
      * @param array $servers
      */
     public function storageServers(array $servers) {
-        $file = fopen(__DIR__ . 'servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+        $file = fopen(__DIR__ . '/servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($servers));
 
@@ -207,7 +207,7 @@ class YunTi {
      * @param array $auth
      */
     public function saveAuth(array $auth) {
-        $file = fopen(__DIR__ . 'auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+        $file = fopen(__DIR__ . '/auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
 
         fwrite($file, json_encode($auth));
 
@@ -341,8 +341,7 @@ $yunti = new YunTi();
 $yunti->run();
 
 // 测速
-// ping google.com
-// down file
+// download google file
 // windows
 // rasdial "你的VPN Name" Username Password
 // /Library/Preferences/SystemConfiguration/preferences.plist
