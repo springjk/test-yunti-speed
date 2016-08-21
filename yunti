@@ -8,7 +8,7 @@ use Sunra\PhpSimple\HtmlDomParser;
 
 class YunTi {
     // /Library/Preferences/SystemConfiguration/preferences.plist
-    const SITE_URL = 'https://www.cryptpline.com';
+    const SITE_URL = 'https://www.yuntidata.com';
     const LOGIN_PATH = '/users/sign_in';
     const SERVERS_PATH = '/admin/servers';
 
@@ -36,7 +36,7 @@ class YunTi {
             'base_uri' => self::SITE_URL,
             'timeout'  => 15,
             'cookies'  => true,
-            // 'debug' => true
+            'debug' => false
         ];
 
         $this->client = new Client($options);
@@ -114,6 +114,7 @@ class YunTi {
             ],
         ]);
 
+
         $html = $result->getBody();
 
         $html_dom = $this->parser->str_get_html($html);
@@ -126,6 +127,9 @@ class YunTi {
         $login_info = $matches[0][0];
 
         if ($login_info == '登录成功') {
+
+            $this->cli->br()->info('登录成功');
+
             return true;
         } else {
             throw new \Exception($login_info);
@@ -136,6 +140,8 @@ class YunTi {
      * @return mixed
      */
     private function getServers() {
+
+        $this->cli->br()->out('获取服务器列表……');
 
         $result = $this->client->get(self::SERVERS_PATH);
 
@@ -148,10 +154,9 @@ class YunTi {
         foreach ($html_dom->find('table tr') as $key => $tr) {
             # ignore th
             if ($key != 0) {
-                $name = trim($tr->find('td[rowspan=2]', -1)->plaintext);
 
-                if (empty($name)) {
-                    $name = $servers[$key - 2]['name'];
+                if ($tr->find('td[rowspan=2]')) {
+                    $name = trim($tr->find('td[rowspan=2]', -1)->plaintext);
                 }
 
                 $ip = trim($tr->find('td', -4)->plaintext);
@@ -161,6 +166,8 @@ class YunTi {
                 $servers[] = compact('name', 'type', 'ip');
             }
         }
+        $this->cli->br()->ingo('服务器列表获取成功，开始测速。');
+
         return $servers;
     }
 
@@ -227,7 +234,7 @@ class YunTi {
             }
         }
 
-        $this->cli->out('ping 啊 ping，ping 个大气球……');
+        $this->cli->br()->out('ping 啊 ping，ping 个大气球……');
 
         foreach ($this->servers as $key => $server) {
             exec('ping -c 5 ' . $server['ip'] . ' > ' . $dir . $key . '.log &');
