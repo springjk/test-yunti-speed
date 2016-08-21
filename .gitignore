@@ -6,3 +6,5 @@ auth.txt
 servers.txt
 
 vendor/
+
+logs/

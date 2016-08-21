@@ -1,0 +1,350 @@
+#!/usr/bin/env php
+<?php
+require __DIR__ . '/vendor/autoload.php';
+
+use GuzzleHttp\Client;
+use League\CLImate\CLImate;
+use Sunra\PhpSimple\HtmlDomParser;
+
+class YunTi {
+    // /Library/Preferences/SystemConfiguration/preferences.plist
+    const SITE_URL = 'https://www.yuntidata.com';
+    const LOGIN_PATH = '/users/sign_in';
+    const SERVERS_PATH = '/admin/servers';
+
+    /**
+     * @var mixed
+     */
+    private $parser;
+    /**
+     * @var mixed
+     */
+    private $client;
+    /**
+     * @var mixed
+     */
+    private $token;
+    /**
+     * @var mixed
+     */
+    private $servers;
+
+    public function __construct() {
+        $this->parser = new HtmlDomParser();
+
+        $options = [
+            'base_uri' => self::SITE_URL,
+            'timeout'  => 15,
+            'cookies'  => true,
+            'debug' => false
+        ];
+
+        $this->client = new Client($options);
+        $this->cli = new CLImate;
+
+        date_default_timezone_set('Asia/Shanghai');
+    }
+
+    public function run() {
+        if (is_file(__DIR__ . '/servers.txt')) {
+            $text = file_get_contents('servers.txt', 'r') or die('Unable to open file!');
+
+            $this->servers = json_decode($text, true);
+
+        } else {
+
+            if (is_file(__DIR__ . '/auth.txt')) {
+                $text = file_get_contents('auth.txt', 'r') or die('Unable to open file!');
+
+                $auth = json_decode($text, true);
+            } else {
+                $auth = $this->inputAuth();
+            }
+
+            $this->saveAuth($auth);
+
+            $this->login($auth['username'], $auth['password']);
+
+            $this->servers = $this->getServers();
+
+            $this->storageServers($this->servers);
+        }
+
+        $avgs = $this->pingTest();
+
+        $this->connection($avgs);
+    }
+
+    /**
+     * @return mixed
+     */
+    public function getCsrfToken() {
+        $result = $this->client->get(self::LOGIN_PATH);
+
+        $html = $result->getBody();
+
+        $html_dom = $this->parser->str_get_html($html);
+
+        $token = $html_dom->find('meta[name=csrf-token]', 0)->getAttribute('content');
+
+        if (empty($token)) {
+            throw new \Exception('Get csrf token error');
+        }
+
+        $this->token = $token;
+
+        return $token;
+    }
+
+    /**
+     * @param $username
+     * @param $password
+     */
+    private function login($username, $password) {
+        $this->getCsrfToken();
+
+        $result = $this->client->post(self::LOGIN_PATH, [
+            'form_params' => [
+                'user[login]'        => $username,
+                'user[password]'     => $password,
+                'user[remember_me]'  => 1,
+                'authenticity_token' => $this->token,
+                'commit'             => '登录',
+                'utf8'               => '✓',
+            ],
+        ]);
+
+
+        $html = $result->getBody();
+
+        $html_dom = $this->parser->str_get_html($html);
+
+        $login_info = $html_dom->find('div.alert-success, div.alert-danger', 0)->plaintext;
+
+        # cut utf-8 chinese
+        preg_match_all('/[\x{4e00}-\x{9fa5}]+/u', $login_info, $matches);
+
+        $login_info = $matches[0][0];
+
+        if ($login_info == '登录成功') {
+
+            $this->cli->br()->info('登录成功');
+
+            return true;
+        } else {
+            throw new \Exception($login_info);
+        }
+    }
+
+    /**
+     * @return mixed
+     */
+    private function getServers() {
+
+        $this->cli->br()->out('获取服务器列表……');
+
+        $result = $this->client->get(self::SERVERS_PATH);
+
+        $html = $result->getBody();
+
+        $html_dom = $this->parser->str_get_html($html);
+
+        $servers = [];
+
+        foreach ($html_dom->find('table tr') as $key => $tr) {
+            # ignore th
+            if ($key != 0) {
+
+                if ($tr->find('td[rowspan=2]')) {
+                    $name = trim($tr->find('td[rowspan=2]', -1)->plaintext);
+                }
+
+                $ip = trim($tr->find('td', -4)->plaintext);
+
+                $type = trim($tr->find('td', -2)->plaintext);
+
+                $servers[] = compact('name', 'type', 'ip');
+            }
+        }
+        $this->cli->br()->ingo('服务器列表获取成功，开始测速。');
+
+        return $servers;
+    }
+
+    /**
+     * @param array $servers
+     */
+    public function storageServers(array $servers) {
+        $file = fopen('servers.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+
+        fwrite($file, json_encode($servers));
+
+        fclose($file);
+    }
+
+    /**
+     * @return mixed
+     */
+    public function inputAuth() {
+        do {
+            fwrite(STDOUT, '请输入您的云梯登陆账号：' . PHP_EOL);
+            $username = trim(fgets(STDIN));
+
+            if ($username) {
+                fwrite(STDOUT, '请输入您的云梯登陆密码：' . PHP_EOL);
+                $password = trim(fgets(STDIN));
+            } else {
+                fwrite(STDOUT, '抱歉，账号不能为空，请重新输入：' . PHP_EOL);
+            }
+
+            $auth = compact('username', 'password');
+        } while (!$auth);
+
+        return $auth;
+    }
+
+    /**
+     * @param array $auth
+     */
+    public function saveAuth(array $auth) {
+        $file = fopen('auth.txt', 'w') or die('Unable to write file!' . PHP_EOL);
+
+        fwrite($file, json_encode($auth));
+
+        fclose($file);
+    }
+
+    /**
+     * @return mixed
+     */
+    public function pingTest() {
+        $dir = __DIR__ . '/logs/';
+
+        if (!is_dir($dir)) {
+            mkdir($dir);
+        } else {
+            # 清理上次的纪录
+            $files = scandir($dir);
+
+            foreach ($files as $key => $file) {
+                $file_path = $dir . $file;
+                if (is_file($file_path)) {
+                    unlink($file_path);
+                }
+            }
+        }
+
+        $this->cli->br()->out('ping 啊 ping，ping 个大气球……');
+
+        foreach ($this->servers as $key => $server) {
+            exec('ping -c 5 ' . $server['ip'] . ' > ' . $dir . $key . '.log &');
+        }
+
+        $avgs = [];
+
+        $progress = $this->cli->br()->progress()->total(count($this->servers));
+
+        $servers = $this->servers;
+
+        while (true) {
+            foreach ($servers as $key => $server) {
+
+                $file_name = $key . '.log';
+
+                $data = file($dir . $file_name);
+
+                $last_line = array_pop($data);
+
+                if (strpos($last_line, 'avg')) {
+                    # Mac用户
+                    preg_match_all('/[1-9]\d*\.\d{3}/', $last_line, $matches);
+
+                    $avg = $matches[0][1];
+
+                    $avgs[$key] = $avg;
+
+                    $this->servers[$key]['avg'] = $avg;
+                } elseif (strpos($last_line, '100.0% packet loss')) {
+                    $avgs[$key] = 'down';
+
+                    $this->servers[$key]['avg'] = 'down';
+                } else {
+                    usleep(5000);
+                    continue;
+                }
+
+                unset($servers[$key]);
+
+                $progress->current(count($avgs));
+            }
+
+            if (count($avgs) == count($this->servers)) {
+
+                $table[] = ['name', 'type', 'ip', 'avg'];
+
+                foreach ($this->servers as $key => $server) {
+                    $table[] = array_values($server);
+                }
+
+                $this->cli->clear();
+
+                $this->cli->br()->columns($table);
+
+                break;
+            }
+        }
+
+        return $avgs;
+    }
+
+    /**
+     * @param $avgs
+     */
+    public function connection($avgs) {
+        $fast_server_key = array_search(min($avgs), $avgs);
+
+        $fastest_vpn_name = '云梯 ' . $this->servers[$fast_server_key]['name'] . ' ' . $this->servers[$fast_server_key]['type'];
+        $fastest_vpn_info = '延迟最低的线路为：' . $fastest_vpn_name . ' AVG: ' . min($avgs);
+
+        $scpt_code_templete = [
+            'tell application "System Events"',
+            'tell current location of network preferences',
+            'set VPNservice to service "' . $fastest_vpn_name . '" -- name of the VPN service',
+            'if exists VPNservice then connect VPNservice',
+            'end tell',
+            'end tell',
+        ];
+        $scpt_code = 'osascript';
+
+        foreach ($scpt_code_templete as $key => $value) {
+            $scpt_code .= ' -e \'' . $value . '\'';
+        }
+
+        $this->cli->br()->out($fastest_vpn_info);
+
+        $old_ip = file_get_contents('http://ip.cip.cc');
+
+        exec($scpt_code, $result);
+
+        $this->cli->br()->out('正在连接' . $fastest_vpn_name . '……');
+
+        do {
+            $new_ip = file_get_contents('http://ip.cip.cc');
+        } while ($new_ip == $old_ip);
+
+        $this->cli->br()->info('完成');
+    }
+}
+
+$yunti = new YunTi();
+
+$yunti->run();
+
+// 测速
+// ping google.com
+// down file
+// windows
+// rasdial "你的VPN Name" Username Password
+// /Library/Preferences/SystemConfiguration/preferences.plist
+// networksetup listallnetworkservices
+// add art title
