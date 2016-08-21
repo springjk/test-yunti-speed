@@ -1,14 +1,22 @@
 #!/usr/bin/env php
 <?php
+/**
+ * @param $url
+ * @return mixed
+ */
 function get($url) {
     $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($ch, CURLOPT_ENCODING, 'gzip');
     curl_setopt($ch, CURLOPT_USERAGENT, 'AlphaGo');
-    $content = curl_exec($ch);
+
+    $response = curl_exec($ch);
     curl_close($ch);
-    return $content;
+
+    return $response;
 }
 
 /**
@@ -27,6 +35,8 @@ function unzip_file($file, $destination) {
     $zip->close();
 }
 
+echo '正在安装云梯…' . PHP_EOL;
+
 # 获取 last releases download url
 $api_url = 'https://api.github.com/repos/springjk/test-yunti-speed/releases/latest';
 
@@ -42,8 +52,8 @@ unzip_file(__DIR__ . '/test-yunti-speed.zip', __DIR__);
 
 unlink(__DIR__ . '/test-yunti-speed.zip');
 # 添加全局执行
-$command = 'ln -s ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
+$command = 'rm /usr/local/bin/yunti && ln -s ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
 
 exec($command);
 
-echo 'success' . PHP_EOL;
+echo '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。' . PHP_EOL;
