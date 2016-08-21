@@ -52,8 +52,13 @@ unzip_file(__DIR__ . '/test-yunti-speed.zip', __DIR__);
 
 unlink(__DIR__ . '/test-yunti-speed.zip');
 # 添加全局执行
-$command = 'rm /usr/local/bin/yunti && ln -s ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
 
-exec($command);
+$command = 'ln -s -f ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
 
-echo '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。' . PHP_EOL;
+$command_return = system($command);
+
+if ($command_return == '') {
+    echo '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。' . PHP_EOL;
+} else {
+    echo '安装中出现错误：' . $command_return;
+}
