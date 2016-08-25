@@ -61,9 +61,13 @@ class YunTi {
                 $auth = $this->inputAuth();
             }
 
-            $this->saveAuth($auth);
+            $login_status = $this->login($auth['username'], $auth['password']);
 
-            $this->login($auth['username'], $auth['password']);
+            if ($login_status) {
+                $this->saveAuth($auth);
+            } else {
+                $this->run();
+            }
 
             $this->servers = $this->getServers();
 
@@ -101,6 +105,9 @@ class YunTi {
      * @param $password
      */
     private function login($username, $password) {
+
+        $this->cli->br()->out('正在登陆…');
+
         $this->getCsrfToken();
 
         $result = $this->client->post(self::LOGIN_PATH, [
@@ -113,7 +120,6 @@ class YunTi {
                 'utf8'               => '✓',
             ],
         ]);
-
 
         $html = $result->getBody();
 
@@ -132,7 +138,9 @@ class YunTi {
 
             return true;
         } else {
-            throw new \Exception($login_info);
+            $this->cli->br()->error($login_info);
+
+            return false;
         }
     }
 
@@ -141,7 +149,7 @@ class YunTi {
      */
     private function getServers() {
 
-        $this->cli->br()->out('获取服务器列表……');
+        $this->cli->br()->out('获取服务器列表…');
 
         $result = $this->client->get(self::SERVERS_PATH);
 
@@ -166,7 +174,7 @@ class YunTi {
                 $servers[] = compact('name', 'type', 'ip');
             }
         }
-        $this->cli->br()->ingo('服务器列表获取成功，开始测速。');
+        $this->cli->br()->ingo('服务器列表获取成功，开始测速…');
 
         return $servers;
     }
@@ -186,19 +194,19 @@ class YunTi {
      * @return mixed
      */
     public function inputAuth() {
-        do {
-            fwrite(STDOUT, '请输入您的云梯登陆账号：' . PHP_EOL);
-            $username = trim(fgets(STDIN));
+        $input = $this->cli->br()->input('请输入您的云梯登陆账号：');
 
-            if ($username) {
-                fwrite(STDOUT, '请输入您的云梯登陆密码：' . PHP_EOL);
-                $password = trim(fgets(STDIN));
-            } else {
-                fwrite(STDOUT, '抱歉，账号不能为空，请重新输入：' . PHP_EOL);
-            }
+        $input->accept(function($response) {
+            return ($response !== '');
+        });
 
-            $auth = compact('username', 'password');
-        } while (!$auth);
+        $username = $input->prompt();
+
+        $input = $this->cli->password('请输入您的云梯登陆密码：');
+
+        $password = $input->prompt();
+
+        $auth = compact('username', 'password');
 
         return $auth;
     }
@@ -234,7 +242,7 @@ class YunTi {
             }
         }
 
-        $this->cli->br()->out('ping 啊 ping，ping 个大气球……');
+        $this->cli->br()->out('ping 啊 ping，ping 个大气球…');
 
         foreach ($this->servers as $key => $server) {
             exec('ping -c 5 ' . $server['ip'] . ' > ' . $dir . $key . '.log &');
@@ -320,19 +328,32 @@ class YunTi {
             $scpt_code .= ' -e \'' . $value . '\'';
         }
 
-        $this->cli->br()->out($fastest_vpn_info);
+        $this->cli->br()->lightBlue($fastest_vpn_info);
 
-        $old_ip = file_get_contents('http://ip.cip.cc');
+        $old_ip = $this->getIp();
 
         exec($scpt_code, $result);
 
-        $this->cli->br()->out('正在连接' . $fastest_vpn_name . '……');
+        $this->cli->br()->out('正在连接' . $fastest_vpn_name . '…');
 
         do {
-            $new_ip = file_get_contents('http://ip.cip.cc');
+            $new_ip = $this->getIp();
         } while ($new_ip == $old_ip);
 
         $this->cli->br()->info('完成');
+    }
+
+    public function getIp()
+    {
+        $client = new Client();
+
+        $response = $client->request('GET', 'http://ip.cn', [
+            'headers' => [
+                'User-Agent' => 'curl/7.21.3 (i686-pc-linux-gnu)',
+            ]
+        ]);
+
+        return $response->getBody();die;
     }
 }
 
@@ -340,10 +361,14 @@ $yunti = new YunTi();
 
 $yunti->run();
 
+// $a = file_get_contents('/Library/Preferences/SystemConfiguration/preferences.plist');
+// C:\Users\jiangkun\AppData\Roaming\Microsoft\Network\Connections\Pbk
+// Get-VpnConnection
 // 测速
 // download google file
 // windows
 // rasdial "你的VPN Name" Username Password
+// exec("powershell C:\\Inetpub\\wwwroot\\emsrDev\\manual_shell.ps1", $output);
 // /Library/Preferences/SystemConfiguration/preferences.plist
 // networksetup listallnetworkservices
 // add art title
