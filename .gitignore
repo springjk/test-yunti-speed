@@ -8,3 +8,5 @@ servers.txt
 vendor/
 
 logs/
+
+.idea/

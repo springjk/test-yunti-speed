@@ -4,7 +4,8 @@
  * @param $url
  * @return mixed
  */
-function get($url) {
+function get($url)
+{
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -23,7 +24,8 @@ function get($url) {
  * @param $file
  * @param $destination
  */
-function unzip_file($file, $destination) {
+function unzip_file($file, $destination)
+{
     $zip = new ZipArchive();
 
     if ($zip->open($file) !== TRUE) {
@@ -35,7 +37,31 @@ function unzip_file($file, $destination) {
     $zip->close();
 }
 
-echo '正在安装云梯…' . PHP_EOL;
+/**
+ * @param $sudo
+ */
+function global_install($sudo = false)
+{
+    $command = 'ln -s -f ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
+
+    if ($sudo) {
+        $command = 'sudo ' . $command;
+    }
+
+    system($command, $command_return);
+
+    if ($command_return === 0) {
+        $text = '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。';
+        echo PHP_EOL . chr(27) . '[1;32m' . $text . chr(27) . '[0m' . PHP_EOL;
+    } else {
+        $text = '当前账户无权安装，将切换到 ROOT 账户，可能需要输入密码。';
+        echo chr(27) . '[1;33m' . $text . chr(27) . '[0m' . PHP_EOL . PHP_EOL;
+
+        global_install(true);
+    }
+}
+
+echo '正在安装云梯脚本…' . PHP_EOL . PHP_EOL;
 
 # 获取 last releases download url
 $api_url = 'https://api.github.com/repos/springjk/test-yunti-speed/releases/latest';
@@ -51,14 +77,6 @@ file_put_contents(__DIR__ . '/test-yunti-speed.zip', get($file_url));
 unzip_file(__DIR__ . '/test-yunti-speed.zip', __DIR__);
 
 unlink(__DIR__ . '/test-yunti-speed.zip');
+
 # 添加全局执行
-
-$command = 'ln -s -f ' . __DIR__ . '/test-yunti-speed/yunti /usr/local/bin/yunti && chmod a+x /usr/local/bin/yunti';
-
-$command_return = system($command);
-
-if ($command_return == '') {
-    echo '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。' . PHP_EOL;
-} else {
-    echo '安装中出现错误：' . $command_return;
-}
+global_install();
