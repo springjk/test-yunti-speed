@@ -2,6 +2,10 @@
 ## 功能
 为云梯 VPN 进行 `ping` 测速选择最优路线并自动连接
 
+## 已知问题
+* macOs Sierra 已移除 PPTP 类型 VPN 原生支持
+* IKEV2 无法通过 apple script 及 command 方式连接
+
 ## 全局安装
 ``` bash
 $ curl -sS https://raw.githubusercontent.com/springjk/test-yunti-speed/master/installer | php
