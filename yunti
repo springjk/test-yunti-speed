@@ -7,8 +7,8 @@ use League\CLImate\CLImate;
 use Sunra\PhpSimple\HtmlDomParser;
 
 class YunTi {
-    // /Library/Preferences/SystemConfiguration/preferences.plist
-    const SITE_URL = 'https://www.yuntidata.com';
+
+    const SITE_URL = 'https://www.yuntiweb.com';
     const LOGIN_PATH = '/users/sign_in';
     const SERVERS_PATH = '/admin/servers';
 
@@ -36,7 +36,10 @@ class YunTi {
             'base_uri' => self::SITE_URL,
             'timeout'  => 15,
             'cookies'  => true,
-            'debug' => false
+            'debug' => false,
+            'headers' => [
+                'User-Agent' => 'AlphaGo'
+            ]
         ];
 
         $this->client = new Client($options);
@@ -159,12 +162,12 @@ class YunTi {
 
         $servers = [];
 
-        foreach ($html_dom->find('table tr') as $key => $tr) {
+        foreach ($html_dom->find('table', 0)->find('tr') as $key => $tr) {
             # ignore th
             if ($key != 0) {
 
-                if ($tr->find('td[rowspan=2]')) {
-                    $name = trim($tr->find('td[rowspan=2]', -1)->plaintext);
+                if ($tr->find('td[rowspan=3]')) {
+                    $name = trim($tr->find('td[rowspan=3]', -1)->plaintext);
                 }
 
                 $ip = trim($tr->find('td', -4)->plaintext);
@@ -290,6 +293,8 @@ class YunTi {
 
                 $table[] = ['name', 'type', 'ip', 'avg'];
 
+                $this->servers = $this->sortArray($this->servers, 'avg');
+
                 foreach ($this->servers as $key => $server) {
                     $table[] = array_values($server);
                 }
@@ -305,15 +310,66 @@ class YunTi {
         return $avgs;
     }
 
+    public function sortArray($array, $sort_key)
+    {
+        $sort_keys = [];
+        foreach ($array as $key => $value) {
+            $sort_keys[] = $value[$sort_key];
+        }
+        array_multisort($sort_keys, SORT_DESC, $array);
+        return $array;
+    }
+
+    public function checkConnectionStatus()
+    {
+        exec('ifconfig |grep ppp0', $result, $result_code);
+        if (!empty($result) && $result_code === 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     /**
      * @param $avgs
      */
     public function connection($avgs) {
-        $fast_server_key = array_search(min($avgs), $avgs);
+        // not soupport PPTP and IkEV2
+        // foreach ($this->servers as $key => $value) {
+        //     if ($value['type'] != 'L2TP') {
+        //         continue;
+        //     } else {
+        //         $fast_server_key = $key;
+        //         break;
+        //     }
+        // }
+        $array_key_count = count($this->servers) - 1;
+
+        for ($i=$array_key_count; $i >= 0; $i--) {
+            if ($value['type'] != 'L2TP') {
+                continue;
+            } else {
+                $fast_server_key = $key;
+                break;
+            }
+        }
+
+        // do {
+        //     $fast_server_key = array_search(min($avgs), $avgs);
+
+        //     if ($this->servers[$fast_server_key]['type'] != 'L2TP') {
+        //         unset($avgs[$fast_server_key]);
+        //     } else {
+        //         break;
+        //     }
+        // } while (true);
 
         $fastest_vpn_name = '云梯 ' . $this->servers[$fast_server_key]['name'] . ' ' . $this->servers[$fast_server_key]['type'];
-        $fastest_vpn_info = '延迟最低的线路为：' . $fastest_vpn_name . ' AVG: ' . min($avgs);
+        $fastest_vpn_info = '延迟最低的线路为：' . $fastest_vpn_name . ' AVG: ' . $this->servers[$fast_server_key]['avg'];
 
+        $this->cli->br()->lightBlue($fastest_vpn_info);
+
+        die();
         $scpt_code_templete = [
             'tell application "System Events"',
             'tell current location of network preferences',
@@ -328,47 +384,27 @@ class YunTi {
             $scpt_code .= ' -e \'' . $value . '\'';
         }
 
-        $this->cli->br()->lightBlue($fastest_vpn_info);
 
-        $old_ip = $this->getIp();
-
-        exec($scpt_code, $result);
 
         $this->cli->br()->out('正在连接' . $fastest_vpn_name . '…');
 
-        do {
-            $new_ip = $this->getIp();
-        } while ($new_ip == $old_ip);
+        exec($scpt_code, $result);
+
+        for ($i=0; $i < 10; $i++) {
+            sleep(1);
+            $status = $this->checkConnectionStatus();
+
+            if ($status) {
+                break;
+            } else if ($i == 9) {
+                $this->cli->br()->error('检测连接状态超时，请亲自确认 VPN 是否已连接。');
+            }
+        }
 
         $this->cli->br()->info('完成');
-    }
-
-    public function getIp()
-    {
-        $client = new Client();
-
-        $response = $client->request('GET', 'http://ip.cn', [
-            'headers' => [
-                'User-Agent' => 'curl/7.21.3 (i686-pc-linux-gnu)',
-            ]
-        ]);
-
-        return $response->getBody();die;
     }
 }
 
 $yunti = new YunTi();
 
 $yunti->run();
-
-// $a = file_get_contents('/Library/Preferences/SystemConfiguration/preferences.plist');
-// C:\Users\jiangkun\AppData\Roaming\Microsoft\Network\Connections\Pbk
-// Get-VpnConnection
-// 测速
-// download google file
-// windows
-// rasdial "你的VPN Name" Username Password
-// exec("powershell C:\\Inetpub\\wwwroot\\emsrDev\\manual_shell.ps1", $output);
-// /Library/Preferences/SystemConfiguration/preferences.plist
-// networksetup listallnetworkservices
-// add art title
