@@ -77,9 +77,9 @@ class YunTi {
             $this->storageServers($this->servers);
         }
 
-        $avgs = $this->pingTest();
+        $this->pingTest();
 
-        $this->connection($avgs);
+        $this->connection();
     }
 
     /**
@@ -330,46 +330,24 @@ class YunTi {
         }
     }
 
-    /**
-     * @param $avgs
-     */
-    public function connection($avgs) {
-        // not soupport PPTP and IkEV2
-        // foreach ($this->servers as $key => $value) {
-        //     if ($value['type'] != 'L2TP') {
-        //         continue;
-        //     } else {
-        //         $fast_server_key = $key;
-        //         break;
-        //     }
-        // }
+    public function connection() {
+        // unsupported PPTP and IkEV2
         $array_key_count = count($this->servers) - 1;
 
         for ($i=$array_key_count; $i >= 0; $i--) {
-            if ($value['type'] != 'L2TP') {
+            if ($this->servers[$i]['type'] != 'L2TP') {
                 continue;
             } else {
-                $fast_server_key = $key;
+                $fast_server_key = $i;
                 break;
             }
         }
 
-        // do {
-        //     $fast_server_key = array_search(min($avgs), $avgs);
-
-        //     if ($this->servers[$fast_server_key]['type'] != 'L2TP') {
-        //         unset($avgs[$fast_server_key]);
-        //     } else {
-        //         break;
-        //     }
-        // } while (true);
-
         $fastest_vpn_name = '云梯 ' . $this->servers[$fast_server_key]['name'] . ' ' . $this->servers[$fast_server_key]['type'];
-        $fastest_vpn_info = '延迟最低的线路为：' . $fastest_vpn_name . ' AVG: ' . $this->servers[$fast_server_key]['avg'];
+        $fastest_vpn_info = '延迟最低 L2TP 的线路为：' . $fastest_vpn_name . ' AVG: ' . $this->servers[$fast_server_key]['avg'];
 
         $this->cli->br()->lightBlue($fastest_vpn_info);
 
-        die();
         $scpt_code_templete = [
             'tell application "System Events"',
             'tell current location of network preferences',
@@ -383,8 +361,6 @@ class YunTi {
         foreach ($scpt_code_templete as $key => $value) {
             $scpt_code .= ' -e \'' . $value . '\'';
         }
-
-
 
         $this->cli->br()->out('正在连接' . $fastest_vpn_name . '…');
 
