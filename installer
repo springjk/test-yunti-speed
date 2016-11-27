@@ -51,7 +51,7 @@ function global_install($sudo = false)
     system($command, $command_return);
 
     if ($command_return === 0) {
-        $text = '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在任意位置运行 yunti 进行 vpn 连接。';
+        $text = '安装成功，命令 yunti 已链接到 /usr/local/bin/，你可以在命令行运行 yunti 进行 vpn 连接。';
         echo PHP_EOL . chr(27) . '[1;32m' . $text . chr(27) . '[0m' . PHP_EOL;
     } else {
         $text = '当前账户无权安装，将切换到 ROOT 账户，可能需要输入密码。';
